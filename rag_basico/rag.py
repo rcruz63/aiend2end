@@ -12,8 +12,18 @@ import click
 
 load_dotenv()
 
+titulos = {
+        "cam_25_halcon_viajes_39_mb_1.md": "Halcon Viajes",
+        "cam_nacional_e_internacional_2025.md": "NAUTALIA Viajes",
+        "CATALOGO_RUTAS_CAM_2025_compressed.md": "B Travel | Carrefour Viajes",
+        "rc25_cibeles_v2.md": "Cibeles",
+        "rc25_veci_ok.md": "Viajes El Corte Inglés",
+        "rutas_25_bttb_v4.md": "B Travel",
+        "rutas25_iag7_v3.md": "IAG7 Viajes",
+    }
 
-def chunker(text: str, filename: str = "", chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+
+def chunker(text: str, filename: str = "", chunk_size: int = 2000, overlap: int = 400) -> list[str]:
     """
     Divide un texto en fragmentos de un tamaño especificado, con un solapamiento entre fragmentos.
     Añade el nombre del archivo como primera línea de cada fragmento.
@@ -33,7 +43,7 @@ def chunker(text: str, filename: str = "", chunk_size: int = 1000, overlap: int 
         chunk_text = text[i : i + chunk_size]
         # Añadir el nombre del archivo como primera línea
         if filename:
-            chunk_with_metadata = f"ARCHIVO: {filename}\n{chunk_text}"
+            chunk_with_metadata = f"Esto es un fragmento del catálogo de viajes de la agencia: {titulos[filename]}\n{chunk_text}"
         else:
             chunk_with_metadata = chunk_text
         chunks.append(chunk_with_metadata)
@@ -192,14 +202,14 @@ def get_embeddings_query(query: str):
 
     return response.data[0].embedding
 
-def buscar_chunks_similares(query: str, max_chunks: int = 5, min_similarity: float = 0.2):
+def buscar_chunks_similares(query: str, max_chunks: int = 5, max_distance=0.95):
     """
     Busca los chunks más similares a un embedding utilizando la función cosine_similarity.
     
     Args:
         query(str): La consulta.
         max_chunks (int): Número máximo de chunks a devolver.
-        min_similarity (float): Umbral mínimo de similitud (0-1).
+        max_distance (float): Umbral máximo de distancia (0-1).
         
     Returns:
         list: Los chunks más similares con sus puntuaciones de similitud.
@@ -230,10 +240,11 @@ def buscar_chunks_similares(query: str, max_chunks: int = 5, min_similarity: flo
                 distance
             from embeddings
             where embedding match ?
+            and distance < ?
             and k = ?
             order by distance;
         """,
-        (sqlite_vec.serialize_float32(query_embedding), max_chunks),
+        (sqlite_vec.serialize_float32(query_embedding), max_distance, max_chunks),
     )
     
     # Obtener los resultados    
@@ -249,8 +260,8 @@ def buscar_chunks_similares(query: str, max_chunks: int = 5, min_similarity: flo
     conn.close()
     
     # Filtrar por similitud si es necesario (1-distance para convertir distancia a similitud)
-    filtered_results = [(chunk, distance) for chunk, distance in results if (1-distance) >= min_similarity]
-    print(f"Chunks que pasan el filtro de similitud ({min_similarity}): {len(filtered_results)}")
+    filtered_results = [(chunk, distance) for chunk, distance in results if distance < max_distance]
+    print(f"Chunks que pasan el filtro de distancia ({max_distance}): {len(filtered_results)}")
     
     return filtered_results
 
@@ -314,7 +325,7 @@ def obtener_respuesta_openai(prompt: str, test_mode: bool = False) -> str:
     return respuesta
 
 
-def realizar_consulta(query: str, max_chunks: int = 5, min_similarity: float = 0.2):
+def realizar_consulta(query: str, max_chunks: int = 5, max_distance: float = 0.95):
     """
     Realiza una consulta al sistema de RAG.
 
@@ -327,13 +338,12 @@ def realizar_consulta(query: str, max_chunks: int = 5, min_similarity: float = 0
     """
     
     # Buscar chunks similares pasando directamente la query como texto
-    similar_chunks = buscar_chunks_similares(query, max_chunks=max_chunks, min_similarity=min_similarity)
+    similar_chunks = buscar_chunks_similares(query, max_chunks=max_chunks, max_distance=max_distance)
 
     print(f"Se encontraron {len(similar_chunks)} chunks similares")
     # Mostramos las primeras 5 líneas de cada chunk y su similitud
     for chunk, distance in similar_chunks[:5]:
-        similarity = 1 - distance
-        print(f"Similitud: {similarity:.4f}")
+        print(f"Distancia: {distance:.4f}")
         print(chunk[:500])
         print("-"*100)
 
@@ -398,7 +408,7 @@ def read_file(file_path: Path) -> str:
     with open(file_path, "r") as file:
         return file.read()
     
-def chunk_files(files: dict, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+def chunk_files(files: dict, chunk_size: int = 2000, overlap: int = 400) -> list[str]:
     """
     Divide el contenido de cada archivo en fragmentos caracteres, con solapamiento.
 
@@ -419,11 +429,12 @@ def chunk_files(files: dict, chunk_size: int = 1000, overlap: int = 200) -> list
 
 @click.command()
 @click.argument('query', required=True)
-@click.option('-c', '--chunk-size', default=1000, help='Tamaño de cada fragmento de texto')
-@click.option('-o', '--overlap', default=200, help='Número de caracteres solapados entre fragmentos')
-@click.option('-s', '--min-similarity', default=0.2, help='Umbral mínimo de similitud (0-1)')
+@click.option('-c', '--chunk-size', default=2000, help='Tamaño de cada fragmento de texto')
+@click.option('-o', '--overlap', default=400, help='Número de caracteres solapados entre fragmentos')
+@click.option('-m', '--max-distance', default=0.95, help='Umbral maximo de distancia')
+@click.option('-k', '--max-chunks', default=5, help='Número máximo de chunks a seleccionar')
 @click.option('-f', '--force', is_flag=True, default=False, help='Rehacer la Base de Datos de Embeddings')
-def main(query, chunk_size, overlap, min_similarity, force):
+def main(query, chunk_size, overlap, max_distance, max_chunks, force):
     """Inicia RAG básico con metadatos simples."""
 
     # Si no existe la base de datos de embeddings o se indica con force, se crea una nueva.
@@ -443,7 +454,7 @@ def main(query, chunk_size, overlap, min_similarity, force):
     
     # Realizar la consulta con la query proporcionada
     print(f"Realizando consulta: '{query}'")
-    respuesta = realizar_consulta(query, min_similarity=min_similarity)
+    respuesta = realizar_consulta(query, max_chunks=max_chunks, max_distance=max_distance)
     print(respuesta)
 
 if __name__ == "__main__":
