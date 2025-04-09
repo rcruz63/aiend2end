@@ -12,6 +12,18 @@ import click
 
 load_dotenv()
 
+# Función para imprimir mensajes de depuración
+def dprint(text: str, debug: bool = False):
+    """
+    Imprime mensajes de depuración solo si el modo debug está activado.
+    
+    Args:
+        text (str): El texto a imprimir
+        debug (bool): Si True, imprime el mensaje; si False, no hace nada
+    """
+    if debug:
+        print(text)
+
 titulos = {
         "cam_25_halcon_viajes_39_mb_1.md": "Halcon Viajes",
         "cam_nacional_e_internacional_2025.md": "NAUTALIA Viajes",
@@ -93,13 +105,14 @@ def load_sqlite_vec(conn):
     sqlite_vec.load(conn)
     conn.enable_load_extension(False)
 
-def get_embeddings(text: str):
+def get_embeddings(text: str, debug: bool = False):
     """
     Genera un embedding para un texto utilizando la API de OpenAI.
     Si el texto ya existe en la caché, devuelve el embedding almacenado.
     
     Args:
         text (str): El texto para el cual generar el embedding.
+        debug (bool): Si True, muestra mensajes de depuración.
         
     Returns:
         list[float]: El vector embedding generado por el modelo.
@@ -114,7 +127,7 @@ def get_embeddings(text: str):
         cached_result = cursor.fetchone()
         
         if cached_result:
-            # print(f"Usando embedding almacenado en caché para el texto: {text[:50]}...")
+            dprint(f"Usando embedding almacenado en caché para el texto: {text[:50]}...", debug)
             conn.close()
             return json.loads(cached_result[0])
         
@@ -132,7 +145,7 @@ def get_embeddings(text: str):
         
         embedding = response.data[0].embedding
 
-        # print(f"Guardando embedding en caché para el texto: {text[:50]}...")
+        dprint(f"Guardando embedding en caché para el texto: {text[:50]}...", debug)
         # Guardar en caché
         
         cursor.execute("INSERT INTO embedding_cache (text_hash, text, embedding) VALUES (?, ?, ?)", 
@@ -148,9 +161,13 @@ def get_embeddings(text: str):
             conn.close()
         return None
 
-def populate_embeddings(chunks: list[str]):
+def populate_embeddings(chunks: list[str], debug: bool = False):
     """
     Poblar la base de datos con los embeddings de los chunks.
+    
+    Args:
+        chunks (list[str]): Lista de fragmentos de texto para generar embeddings.
+        debug (bool): Si True, muestra mensajes de depuración.
     """
 
     # Conectar a la base de datos (se creará si no existe)
@@ -171,7 +188,7 @@ def populate_embeddings(chunks: list[str]):
     conn.execute("BEGIN TRANSACTION")
 
     for chunk in tqdm(chunks, desc="Generando embeddings"):
-        embedding = get_embeddings(chunk)
+        embedding = get_embeddings(chunk, debug=debug)
         cursor.execute(
             "INSERT INTO embeddings (embedding, chunk) VALUES (?, ?)",
                 (sqlite_vec.serialize_float32(embedding), chunk),
@@ -180,7 +197,7 @@ def populate_embeddings(chunks: list[str]):
     # Commit y cierre de conexión
     conn.commit()
     conn.close()
-    print(f"Se almacenaron {len(chunks)} embeddings en la base de datos")
+    dprint(f"Se almacenaron {len(chunks)} embeddings en la base de datos", debug)
     return True
     
 
@@ -202,7 +219,7 @@ def get_embeddings_query(query: str):
 
     return response.data[0].embedding
 
-def buscar_chunks_similares(query: str, max_chunks: int = 5, max_distance=0.95):
+def buscar_chunks_similares(query: str, max_chunks: int = 5, max_distance=0.95, debug: bool = False):
     """
     Busca los chunks más similares a un embedding utilizando la función cosine_similarity.
     
@@ -210,6 +227,7 @@ def buscar_chunks_similares(query: str, max_chunks: int = 5, max_distance=0.95):
         query(str): La consulta.
         max_chunks (int): Número máximo de chunks a devolver.
         max_distance (float): Umbral máximo de distancia (0-1).
+        debug (bool): Si True, muestra mensajes de depuración.
         
     Returns:
         list: Los chunks más similares con sus puntuaciones de similitud.
@@ -225,12 +243,12 @@ def buscar_chunks_similares(query: str, max_chunks: int = 5, max_distance=0.95):
     cursor = conn.cursor()
     
     # Ejecutar la consulta SQL para obtener los chunks similares usando cosine_similarity
-    print("Ejecutando consulta SQL para buscar chunks similares...")
+    dprint("Ejecutando consulta SQL para buscar chunks similares...", debug)
     
     # Primero, vamos a comprobar cuántos chunks hay en total en la base de datos
     cursor.execute("SELECT COUNT(*) FROM embeddings")
     total_chunks = cursor.fetchone()[0]
-    print(f"Total de chunks en la base de datos: {total_chunks}")
+    dprint(f"Total de chunks en la base de datos: {total_chunks}", debug)
     
     # Ahora ejecutamos la consulta de similitud pero sin filtros
     cursor.execute(
@@ -249,19 +267,19 @@ def buscar_chunks_similares(query: str, max_chunks: int = 5, max_distance=0.95):
     
     # Obtener los resultados    
     results = cursor.fetchall()
-    print(f"Chunks encontrados antes de filtrar: {len(results)}")
+    dprint(f"Chunks encontrados antes de filtrar: {len(results)}", debug)
     
     # Mostrar las distancias para diagnóstico
-    print("Distancias de los chunks encontrados:")
+    dprint("Distancias de los chunks encontrados:", debug)
     for i, (_, distance) in enumerate(results):
         similarity = 1 - distance
-        print(f"Chunk {i+1}: Distancia={distance:.4f}, Similitud={similarity:.4f}")
+        dprint(f"Chunk {i+1}: Distancia={distance:.4f}, Similitud={similarity:.4f}", debug)
     
     conn.close()
     
     # Filtrar por similitud si es necesario (1-distance para convertir distancia a similitud)
     filtered_results = [(chunk, distance) for chunk, distance in results if distance < max_distance]
-    print(f"Chunks que pasan el filtro de distancia ({max_distance}): {len(filtered_results)}")
+    dprint(f"Chunks que pasan el filtro de distancia ({max_distance}): {len(filtered_results)}", debug)
     
     return filtered_results
 
@@ -325,7 +343,7 @@ def obtener_respuesta_openai(prompt: str, test_mode: bool = False) -> str:
     return respuesta
 
 
-def realizar_consulta(query: str, max_chunks: int = 5, max_distance: float = 0.95):
+def realizar_consulta(query: str, max_chunks: int = 5, max_distance: float = 0.95, debug: bool = False):
     """
     Realiza una consulta al sistema de RAG.
 
@@ -335,23 +353,30 @@ def realizar_consulta(query: str, max_chunks: int = 5, max_distance: float = 0.9
     Se contruye un prompt con los chunks más similares.
     Se realiza una consulta a OpenAI con el prompt.
     Se devuelve el resultado de la consulta.
+    
+    Args:
+        query (str): La consulta del usuario.
+        max_chunks (int): Número máximo de chunks a seleccionar.
+        max_distance (float): Umbral máximo de distancia.
+        debug (bool): Si True, muestra mensajes de depuración.
+        
+    Returns:
+        str: La respuesta generada por OpenAI.
     """
     
     # Buscar chunks similares pasando directamente la query como texto
-    similar_chunks = buscar_chunks_similares(query, max_chunks=max_chunks, max_distance=max_distance)
+    similar_chunks = buscar_chunks_similares(query, max_chunks=max_chunks, max_distance=max_distance, debug=debug)
 
-    print(f"Se encontraron {len(similar_chunks)} chunks similares")
+    dprint(f"Se encontraron {len(similar_chunks)} chunks similares", debug)
     # Mostramos las primeras 5 líneas de cada chunk y su similitud
     for chunk, distance in similar_chunks[:5]:
-        print(f"Distancia: {distance:.4f}")
-        print(chunk[:500])
-        print("-"*100)
+        dprint(f"Distancia: {distance:.4f}", debug)
+        dprint(chunk[:500], debug)
+        dprint("-"*100, debug)
 
     prompt = crear_prompt(query, similar_chunks, max_chunks=max_chunks)
 
     respuesta = obtener_respuesta_openai(prompt)
-
-    print(respuesta)
 
     return respuesta
 
@@ -372,12 +397,13 @@ def get_all_file_paths(directory: str=".") -> list[str]:
     md_files = glob.glob(file_pattern)
     return [Path(f) for f in md_files]
 
-def read_files(directory: str=".") -> dict:
+def read_files(directory: str=".", debug: bool = False) -> dict:
     """
     Lee el contenido de todos los archivos `.md` en el directorio especificado.
     
     Args:
         directory (str): El directorio a buscar archivos `.md`. Por defecto es el directorio actual.
+        debug (bool): Si True, muestra mensajes de depuración.
         
     Returns:
         dict: Un diccionario con el nombre como clave y el contenido como valor. 
@@ -390,8 +416,7 @@ def read_files(directory: str=".") -> dict:
     for file_path in file_paths:
         md_files[file_path.name] = read_file(file_path)
 
-
-    print(f"Se encontraron {len(md_files)} archivos .md: {list(md_files.keys())}")
+    dprint(f"Se encontraron {len(md_files)} archivos .md: {list(md_files.keys())}", debug)
     return md_files
 
 def read_file(file_path: Path) -> str:
@@ -434,27 +459,30 @@ def chunk_files(files: dict, chunk_size: int = 2000, overlap: int = 400) -> list
 @click.option('-m', '--max-distance', default=0.95, help='Umbral maximo de distancia')
 @click.option('-k', '--max-chunks', default=5, help='Número máximo de chunks a seleccionar')
 @click.option('-f', '--force', is_flag=True, default=False, help='Rehacer la Base de Datos de Embeddings')
-def main(query, chunk_size, overlap, max_distance, max_chunks, force):
+@click.option('-d', '--debug', is_flag=True, default=False, help='Activar modo depuración')
+def main(query, chunk_size, overlap, max_distance, max_chunks, force, debug):
     """Inicia RAG básico con metadatos simples."""
 
     # Si no existe la base de datos de embeddings o se indica con force, se crea una nueva.
     if not os.path.exists("embeddings.db") or force:
-        print("Rehaciendo la Base de Datos de Embeddings")
+        dprint("Rehaciendo la Base de Datos de Embeddings", debug)
 
-        print("Iniciando RAG básico con metadatos simples")
-        print(f"Configuración: chunk_size={chunk_size}, overlap={overlap}")
+        dprint("Iniciando RAG básico con metadatos simples", debug)
+        dprint(f"Configuración: chunk_size={chunk_size}, overlap={overlap}", debug)
     
         # Leer archivos y obtener rutas
-        files = read_files("./test_catalogo")
+        files = read_files("./test_catalogo", debug=debug)
         
         # Dividir en chunks con metadatos
         chunks = chunk_files(files, chunk_size=chunk_size, overlap=overlap)
 
-        populate_embeddings(chunks)
+        populate_embeddings(chunks, debug=debug)
     
     # Realizar la consulta con la query proporcionada
-    print(f"Realizando consulta: '{query}'")
-    respuesta = realizar_consulta(query, max_chunks=max_chunks, max_distance=max_distance)
+    dprint(f"Realizando consulta: '{query}'", debug)
+    respuesta = realizar_consulta(query, max_chunks=max_chunks, max_distance=max_distance, debug=debug)
+    
+    # Esta es la única impresión que no usamos dprint porque es la respuesta final al usuario
     print(respuesta)
 
 if __name__ == "__main__":
