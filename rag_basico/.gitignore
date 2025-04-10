@@ -41,3 +41,4 @@ data/
 # Archivos de Test
 test_catalogo/
 data_old/
+*.zip
