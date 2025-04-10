@@ -471,7 +471,7 @@ def main(query, chunk_size, overlap, max_distance, max_chunks, force, debug):
         dprint(f"Configuración: chunk_size={chunk_size}, overlap={overlap}", debug)
     
         # Leer archivos y obtener rutas
-        files = read_files("./test_catalogo", debug=debug)
+        files = read_files("./catalogo_md", debug=debug)
         
         # Dividir en chunks con metadatos
         chunks = chunk_files(files, chunk_size=chunk_size, overlap=overlap)
