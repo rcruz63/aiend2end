@@ -87,6 +87,10 @@ def run_agent(prompt, debug: bool = False):
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt},
     ]
+    process_agent(history, debug)
+    return history
+
+def process_agent(history, debug: bool = False):
     dprint(f"Historial pre-llm: {history}", debug)
     response = llm(history, debug)
     dprint(f"Historial pre-procesamiento: {history}", debug)
@@ -98,7 +102,6 @@ def run_agent(prompt, debug: bool = False):
     else:
         history.append({"role": "assistant", "content": final_response})
     dprint(f"Historial post-procesamiento: {history}", debug)
-    return history
 
 def validar_respuesta(prompt: str, response: str, debug: bool = False) -> bool:
     prompt = validate_prompt.format(prompt=prompt, response=response)
@@ -107,94 +110,152 @@ def validar_respuesta(prompt: str, response: str, debug: bool = False) -> bool:
     matches = list(regex.finditer(response))
     return matches[0].group(1) == "TRUE"
 
-def process_calc(history, response, debug: bool = False):
-    regex = re.compile(r"```python\s*VIAJES\(\s*\"(.*?)\"\s*\)\s*```", re.DOTALL)
-    matches = list(regex.finditer(response))
-    final_response = response
-    
-    # Obtener la pregunta original del usuario
-    user_prompt = ""
+def obtener_pregunta_usuario(history):
+    """
+    Extrae la pregunta original del usuario del historial.
+    """
     for message in history:
         if message["role"] == "user" and not message["content"].startswith("```python"):
-            user_prompt = message["content"]
-            break
+            return message["content"]
+    return ""
 
-    # Si hay una llamada a VIAJES, procesarla
+def extraer_llamadas_viajes(response):
+    """
+    Extrae las llamadas a la función VIAJES de la respuesta.
+    """
+    regex = re.compile(r"```python\s*VIAJES\(\s*\"(.*?)\"\s*\)\s*```", re.DOTALL)
+    matches = list(regex.finditer(response))
+    return matches
+
+def ejecutar_consulta_viajes(consulta, debug=False):
+    """
+    Ejecuta una consulta a la base de datos de viajes.
+    """
+    try:
+        result = realizar_consulta(consulta, max_chunks=5, max_distance=0.9, debug=debug)
+        if not result or result.strip() == "":
+            result = "No se encontró información específica sobre esta consulta en nuestra base de datos de viajes."
+        return result
+    except Exception as e:
+        dprint(f"Error al ejecutar la consulta: {str(e)}", debug)
+        return "Error al procesar la consulta. Por favor, inténtalo de nuevo con una pregunta más específica sobre viajes."
+
+def ejecutar_consulta_mejorada_viajes(consulta, debug=False):
+    """
+    Ejecuta una consulta mejorada a la base de datos de viajes.
+    """
+    try:
+        result = realizar_consulta_mejorada(consulta, max_chunks=5, max_distance=0.9, responses=3, debug=debug)
+        if not result or result.strip() == "":
+            result = "No se encontró información específica sobre esta consulta en nuestra base de datos de viajes."
+        return result
+    except Exception as e:
+        dprint(f"Error al ejecutar la consulta mejorada: {str(e)}", debug)
+        return "No se encontró información específica sobre esta consulta en nuestra base de datos de viajes."
+
+def añadir_resultado_al_historial(history, consulta, resultado, es_mejorado=False):
+    """
+    Añade el resultado de una consulta al historial.
+    """
+    tipo = "mejorado" if es_mejorado else ""
+    history.append(
+        {
+            "role": "user",
+            "content": f'```python\nVIAJES("{consulta}") # resultado {tipo}: {resultado}\n```',
+        }
+    )
+
+def procesar_respuesta_llm(history, debug=False):
+    """
+    Procesa la respuesta del LLM y elimina bloques de código VIAJES si es necesario.
+    """
+    try:
+        final_response = llm(history, debug)
+        if "```python" in final_response and "VIAJES" in final_response:
+            dprint("La respuesta aún contiene bloques de código VIAJES", debug)
+            text_parts = final_response.split("```python")
+            if text_parts and text_parts[0].strip():
+                return text_parts[0].strip()
+            else:
+                # Extraer la consulta original del historial
+                consulta = ""
+                for msg in history:
+                    if msg["role"] == "user" and "VIAJES" in msg["content"]:
+                        match = re.search(r'VIAJES\("(.*?)"\)', msg["content"])
+                        if match:
+                            consulta = match.group(1)
+                            break
+                return f"Basado en tu consulta sobre '{consulta}', no pude encontrar información específica."
+        return final_response
+    except Exception as e:
+        dprint(f"Error al generar la respuesta: {str(e)}", debug)
+        # Extraer la consulta original del historial
+        consulta = ""
+        for msg in history:
+            if msg["role"] == "user" and "VIAJES" in msg["content"]:
+                match = re.search(r'VIAJES\("(.*?)"\)', msg["content"])
+                if match:
+                    consulta = match.group(1)
+                    break
+        return f"Basado en tu consulta sobre '{consulta}', no pude encontrar información específica."
+
+def actualizar_historial_con_respuesta(history, respuesta):
+    """
+    Actualiza el historial con la respuesta final.
+    """
+    if history[-1]["role"] == "assistant":
+        history[-1]["content"] = respuesta
+    else:
+        history.append({"role": "assistant", "content": respuesta})
+
+def process_calc(history, response, debug: bool = False):
+    """
+    Procesa la respuesta del LLM y realiza consultas a la base de datos de viajes si es necesario.
+    """
+    # Inicialización
+    final_response = response
+    user_prompt = obtener_pregunta_usuario(history)
+    matches = extraer_llamadas_viajes(response)
+    
+    # Procesar llamadas a VIAJES si existen
     if matches:
         match_str = matches[0].group(1)
         dprint(f"Consulta extraída: {match_str}", debug)
-        try:
-            result = realizar_consulta(match_str, max_chunks=5, max_distance=0.9, debug=debug)
-            if not result or result.strip() == "":
-                result = "No se encontró información específica sobre esta consulta en nuestra base de datos de viajes."
-        except Exception as e:
-            dprint(f"Error al ejecutar la consulta: {str(e)}", debug)
-            result = "Error al procesar la consulta. Por favor, inténtalo de nuevo con una pregunta más específica sobre viajes."
-
-        # Añadir el resultado al historial
-        history.append(
-            {
-                "role": "user",
-                "content": f'```python\nVIAJES("{match_str}") # resultado: {result}\n```',
-            }
-        )
-
-        try:
-            final_response = llm(history, debug)
-            # Verificar si la respuesta sigue conteniendo bloques de código VIAJES
-            if "```python" in final_response and "VIAJES" in final_response:
-                dprint("La respuesta aún contiene bloques de código VIAJES", debug)
-                # Intentar extraer solo la parte de texto antes del bloque de código
-                text_parts = final_response.split("```python")
-                if text_parts and text_parts[0].strip():
-                    final_response = text_parts[0].strip()
-                else:
-                    final_response = f"Basado en tu consulta sobre '{match_str}', {result}"
-        except Exception as e:
-            dprint(f"Error al generar la respuesta final: {str(e)}", debug)
-            final_response = f"Basado en tu consulta sobre '{match_str}', {result}"
-
-        history.append({"role": "assistant", "content": final_response})
+        
+        # Ejecutar consulta
+        result = ejecutar_consulta_viajes(match_str, debug)
+        
+        # Añadir resultado al historial
+        añadir_resultado_al_historial(history, match_str, result)
+        
+        # Procesar respuesta del LLM
+        final_response = procesar_respuesta_llm(history, debug)
+        
+        # Actualizar historial
+        actualizar_historial_con_respuesta(history, final_response)
         
         consulta_validar = match_str
     else:
         # Si no hay llamada a VIAJES, usamos la pregunta original para validar
         consulta_validar = user_prompt
 
-    # Validar la respuesta y mejorarla si es necesario
+    # Validar y mejorar la respuesta si es necesario
     try:
         is_valid = validar_respuesta(user_prompt, final_response, debug)
         if not is_valid:
             dprint(f"** MEJORANDO RESPUESTA **: {final_response}", debug)
-            try:
-                result = realizar_consulta_mejorada(consulta_validar, max_chunks=5, max_distance=0.9, responses=3, debug=debug)
-                if not result or result.strip() == "":
-                    result = "No se encontró información específica sobre esta consulta en nuestra base de datos de viajes."
-            except Exception as e:
-                dprint(f"Error al ejecutar la consulta mejorada: {str(e)}", debug)
-                result = "No se encontró información específica sobre esta consulta en nuestra base de datos de viajes."
-
-            history.append(
-                {
-                    "role": "user",
-                    "content": f'```python\nVIAJES("{consulta_validar}") # resultado mejorado: {result}\n```',
-                }
-            )
-
-            try:
-                final_response = llm(history, debug)
-                # Verificar nuevamente si la respuesta contiene bloques de código
-                if "```python" in final_response and "VIAJES" in final_response:
-                    text_parts = final_response.split("```python")
-                    if text_parts and text_parts[0].strip():
-                        final_response = text_parts[0].strip()
-                    else:
-                        final_response = f"Basado en tu consulta sobre '{consulta_validar}', {result}"
-            except Exception as e:
-                dprint(f"Error al generar la respuesta mejorada: {str(e)}", debug)
-                final_response = f"Basado en tu consulta sobre '{consulta_validar}', {result}"
-
-            history.append({"role": "assistant", "content": final_response})
+            
+            # Ejecutar consulta mejorada
+            result = ejecutar_consulta_mejorada_viajes(consulta_validar, debug)
+            
+            # Añadir resultado mejorado al historial
+            añadir_resultado_al_historial(history, consulta_validar, result, es_mejorado=True)
+            
+            # Procesar respuesta mejorada del LLM
+            final_response = procesar_respuesta_llm(history, debug)
+            
+            # Actualizar historial con la respuesta mejorada
+            actualizar_historial_con_respuesta(history, final_response)
     except Exception as e:
         dprint(f"Error en la validación: {str(e)}", debug)
         # No modificar final_response si hay un error en la validación
