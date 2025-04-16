@@ -24,7 +24,7 @@ def llm(messages: list[dict], debug: bool = False) -> str:
     return response.choices[0].message.content
 
 
-system_prompt = """
+_SYSTEM_PROMPT = """
 Tienes a tu disposición una herramientas: VIAJES. Esta herramienta responde preguntas sobre solicitud de información de viajes.
 Los paquetes de viajes tambien se pueden denominar ofertas de viajes.
 Los itinerarios de viajes tambien se pueden denominar rutas de viajes u ofertas de viajes.
@@ -42,7 +42,7 @@ Crea un bloque de código siempre que llames a una herramienta. Si son varias, p
 - Contesta SIEMPRE en español de España.
 """
 
-validate_prompt = """
+_VALIDATE_PROMPT = """
 Un RAG sobre catálogos de viajes y ofertas sobre viajes ha generado una respuesta a una pregunta del usuario.
 
 La respuesta recibida ha sido:
@@ -74,42 +74,6 @@ FALSE
 ```
 """
 
-@click.command()
-@click.option("--prompt", "-p", required=True, help="The prompt to send to the LLM")
-@click.option('-d', '--debug', is_flag=True, default=False, help='Activar modo depuración')
-def main(prompt, debug):
-    history = run_agent(prompt, debug)
-    print(history[-1]["content"])
-
-
-def run_agent(prompt, debug: bool = False):
-    history = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt},
-    ]
-    process_agent(history, debug)
-    return history
-
-def process_agent(history, debug: bool = False):
-    dprint(f"Historial pre-llm: {history}", debug)
-    response = llm(history, debug)
-    dprint(f"Historial pre-procesamiento: {history}", debug)
-    history.append({"role": "assistant", "content": response})
-    final_response = process_calc(history, response, debug)
-    # Actualizar la última respuesta en el historial
-    if history[-1]["role"] == "assistant":
-        history[-1]["content"] = final_response
-    else:
-        history.append({"role": "assistant", "content": final_response})
-    dprint(f"Historial post-procesamiento: {history}", debug)
-
-def validar_respuesta(prompt: str, response: str, debug: bool = False) -> bool:
-    prompt = validate_prompt.format(prompt=prompt, response=response)
-    response = llm([{"role": "user", "content": prompt}], debug)
-    regex = re.compile(r"```python\s*(.*?)\s*```", re.DOTALL)
-    matches = list(regex.finditer(response))
-    return matches[0].group(1) == "TRUE"
-
 def obtener_pregunta_usuario(history):
     """
     Extrae la pregunta original del usuario del historial.
@@ -119,6 +83,7 @@ def obtener_pregunta_usuario(history):
             return message["content"]
     return ""
 
+
 def extraer_llamadas_viajes(response):
     """
     Extrae las llamadas a la función VIAJES de la respuesta.
@@ -126,6 +91,7 @@ def extraer_llamadas_viajes(response):
     regex = re.compile(r"```python\s*VIAJES\(\s*\"(.*?)\"\s*\)\s*```", re.DOTALL)
     matches = list(regex.finditer(response))
     return matches
+
 
 def ejecutar_consulta_viajes(consulta, debug=False):
     """
@@ -140,6 +106,7 @@ def ejecutar_consulta_viajes(consulta, debug=False):
         dprint(f"Error al ejecutar la consulta: {str(e)}", debug)
         return "Error al procesar la consulta. Por favor, inténtalo de nuevo con una pregunta más específica sobre viajes."
 
+
 def ejecutar_consulta_mejorada_viajes(consulta, debug=False):
     """
     Ejecuta una consulta mejorada a la base de datos de viajes.
@@ -153,6 +120,7 @@ def ejecutar_consulta_mejorada_viajes(consulta, debug=False):
         dprint(f"Error al ejecutar la consulta mejorada: {str(e)}", debug)
         return "No se encontró información específica sobre esta consulta en nuestra base de datos de viajes."
 
+
 def añadir_resultado_al_historial(history, consulta, resultado, es_mejorado=False):
     """
     Añade el resultado de una consulta al historial.
@@ -164,6 +132,25 @@ def añadir_resultado_al_historial(history, consulta, resultado, es_mejorado=Fal
             "content": f'```python\nVIAJES("{consulta}") # resultado {tipo}: {resultado}\n```',
         }
     )
+
+
+def actualizar_historial_con_respuesta(history, respuesta):
+    """
+    Actualiza el historial con la respuesta final.
+    """
+    if history[-1]["role"] == "assistant":
+        history[-1]["content"] = respuesta
+    else:
+        history.append({"role": "assistant", "content": respuesta})
+
+
+def validar_respuesta(prompt: str, response: str, debug: bool = False) -> bool:
+    prompt = _VALIDATE_PROMPT.format(prompt=prompt, response=response)
+    response = llm([{"role": "user", "content": prompt}], debug)
+    regex = re.compile(r"```python\s*(.*?)\s*```", re.DOTALL)
+    matches = list(regex.finditer(response))
+    return matches[0].group(1) == "TRUE"
+
 
 def procesar_respuesta_llm(history, debug=False):
     """
@@ -199,16 +186,8 @@ def procesar_respuesta_llm(history, debug=False):
                     break
         return f"Basado en tu consulta sobre '{consulta}', no pude encontrar información específica."
 
-def actualizar_historial_con_respuesta(history, respuesta):
-    """
-    Actualiza el historial con la respuesta final.
-    """
-    if history[-1]["role"] == "assistant":
-        history[-1]["content"] = respuesta
-    else:
-        history.append({"role": "assistant", "content": respuesta})
 
-def process_calc(history, response, debug: bool = False):
+def process_agent_viajes(history, response, debug: bool = False):
     """
     Procesa la respuesta del LLM y realiza consultas a la base de datos de viajes si es necesario.
     """
@@ -261,6 +240,37 @@ def process_calc(history, response, debug: bool = False):
         # No modificar final_response si hay un error en la validación
 
     return final_response
+
+
+def process_agent(history, debug: bool = False):
+    dprint(f"Historial pre-llm: {history}", debug)
+    response = llm(history, debug)
+    dprint(f"Historial pre-procesamiento: {history}", debug)
+    history.append({"role": "assistant", "content": response})
+    final_response = process_agent_viajes(history, response, debug)
+    # Actualizar la última respuesta en el historial
+    if history[-1]["role"] == "assistant":
+        history[-1]["content"] = final_response
+    else:
+        history.append({"role": "assistant", "content": final_response})
+    dprint(f"Historial post-procesamiento: {history}", debug)
+
+
+def run_agent(prompt, debug: bool = False):
+    history = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+    process_agent(history, debug)
+    return history
+
+
+@click.command()
+@click.option("--prompt", "-p", required=True, help="The prompt to send to the LLM")
+@click.option('-d', '--debug', is_flag=True, default=False, help='Activar modo depuración')
+def main(prompt, debug):
+    history = run_agent(prompt, debug)
+    print(history[-1]["content"])
 
 
 if __name__ == "__main__":

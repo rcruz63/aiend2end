@@ -1,7 +1,7 @@
 [project]
-name = "rag-basico"
+name = "agente-catalogo"
 version = "0.1.0"
-description = "Add your description here"
+description = "Validaciones sobre el agente de Viajes"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,4 +10,8 @@ dependencies = [
     "python-dotenv>=1.1.0",
     "sqlite-vec>=0.1.6",
     "tqdm>=4.67.1",
+    "pytest>=8.3.5",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
