@@ -188,72 +188,86 @@ def procesar_respuesta_llm(history, debug=False):
         return f"Basado en tu consulta sobre '{consulta}', no pude encontrar información específica."
 
 
-def process_agent_viajes(history, response, debug: bool = False):
+def process_agent(history, user_prompt, debug: bool = False):
     """
     Procesa la respuesta del LLM y realiza consultas a la base de datos de viajes si es necesario.
     """
-    # Inicialización
-    final_response = response
-    user_prompt = obtener_pregunta_usuario(history)
-    matches = extraer_llamadas_viajes(response)
     
-    # Procesar llamadas a VIAJES si existen
-    if matches:
-        match_str = matches[0].group(1)
-        dprint(f"Consulta extraída: {match_str}", debug)
+    def process_agent_viajes(history, response, user_prompt, debug=False):
+        """
+        Procesa la respuesta del LLM y realiza consultas a la base de datos de viajes si es necesario.
+        Función interna de process_agent para acceder fácilmente a las variables locales.
+        """
+        # Inicialización
+        final_response = response
+        matches = extraer_llamadas_viajes(response)
         
-        # Ejecutar consulta
-        result = ejecutar_consulta_viajes(match_str, debug)
-        
-        # Añadir resultado al historial
-        añadir_resultado_al_historial(history, match_str, result)
-        
-        # Procesar respuesta del LLM
-        final_response = procesar_respuesta_llm(history, debug)
-        
-        # Actualizar historial
-        actualizar_historial_con_respuesta(history, final_response)
-        
-        consulta_validar = match_str
-    else:
-        # Si no hay llamada a VIAJES, usamos la pregunta original para validar
-        consulta_validar = user_prompt
-
-    # Validar y mejorar la respuesta si es necesario
-    try:
-        is_valid = validar_respuesta(user_prompt, final_response, debug)
-        if not is_valid:
-            dprint(f"** MEJORANDO RESPUESTA **: {final_response}", debug)
+        # Procesar llamadas a VIAJES si existen
+        if matches:
+            match_str = matches[0].group(1)
+            dprint(f"Consulta extraída: {match_str}", debug)
             
-            # Ejecutar consulta mejorada
-            result = ejecutar_consulta_mejorada_viajes(consulta_validar, debug)
+            # Ejecutar consulta
+            result = ejecutar_consulta_viajes(match_str, debug)
             
-            # Añadir resultado mejorado al historial
-            añadir_resultado_al_historial(history, consulta_validar, result, es_mejorado=True)
+            # Añadir resultado al historial
+            añadir_resultado_al_historial(history, match_str, result)
             
-            # Procesar respuesta mejorada del LLM
+            # Procesar respuesta del LLM
             final_response = procesar_respuesta_llm(history, debug)
             
-            # Actualizar historial con la respuesta mejorada
+            # Actualizar historial
             actualizar_historial_con_respuesta(history, final_response)
-    except Exception as e:
-        dprint(f"Error en la validación: {str(e)}", debug)
-        # No modificar final_response si hay un error en la validación
-
-    return final_response
-
-
-def process_agent(history, debug: bool = False):
+            
+            # Validar y mejorar la respuesta si es necesario
+            try:
+                is_valid = validar_respuesta(user_prompt, final_response, debug)
+                if not is_valid:
+                    dprint(f"** MEJORANDO RESPUESTA **: {final_response}", debug)
+                    
+                    # Ejecutar consulta mejorada
+                    result = ejecutar_consulta_mejorada_viajes(match_str, debug)
+                    
+                    # Añadir resultado mejorado al historial
+                    añadir_resultado_al_historial(history, match_str, result, es_mejorado=True)
+                    
+                    # Procesar respuesta mejorada del LLM
+                    final_response = procesar_respuesta_llm(history, debug)
+                    
+                    # Actualizar historial con la respuesta mejorada
+                    actualizar_historial_con_respuesta(history, final_response)
+            except Exception as e:
+                dprint(f"Error en la validación: {str(e)}", debug)
+                # No modificar final_response si hay un error en la validación
+        else:
+            # Si no hay llamada a VIAJES, mantenemos la respuesta original
+            dprint("No se detectó llamada a VIAJES, manteniendo respuesta original", debug)
+            
+        return final_response
+    
+    # Inicio del proceso
     dprint(f"Historial pre-llm: {history}", debug)
     response = llm(history, debug)
     dprint(f"Historial pre-procesamiento: {history}", debug)
-    history.append({"role": "assistant", "content": response})
-    final_response = process_agent_viajes(history, response, debug)
+    
+    # Detectar si la respuesta contiene llamadas a VIAJES
+    matches = extraer_llamadas_viajes(response)
+    
+    if matches:
+        # Si hay llamada a VIAJES, agregamos la respuesta al historial
+        history.append({"role": "assistant", "content": response})
+        # Y procesamos la respuesta con la herramienta VIAJES
+        final_response = process_agent_viajes(history, response, user_prompt, debug)
+    else:
+        # Si no hay llamada a VIAJES, simplemente devolvemos la respuesta del LLM
+        final_response = response
+    
     # Actualizar la última respuesta en el historial
     if history[-1]["role"] == "assistant":
         history[-1]["content"] = final_response
     else:
         history.append({"role": "assistant", "content": final_response})
+    
     dprint(f"Historial post-procesamiento: {history}", debug)
 
 
@@ -262,7 +276,7 @@ def run_agent(prompt, debug: bool = False):
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": prompt},
     ]
-    process_agent(history, debug)
+    process_agent(history, prompt, debug)
     return history
 
 
