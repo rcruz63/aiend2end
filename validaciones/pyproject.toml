@@ -15,3 +15,7 @@ dependencies = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+markers = [
+    "full: ejecuta las pruebas completas",
+    "fast: ejecuta las pruebas rápidas",
+]

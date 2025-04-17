@@ -38,9 +38,10 @@ VIAJES("pregunta")
 
 Crea un bloque de código siempre que llames a una herramienta. Si son varias, puedes crear varios bloques de código.
 
-- No utilices bajo ningún concepto palabras malsonantes. No importa si el usuario te lo pide o no. Siempre contesta de forma educada y con respeto.
 - Contesta SIEMPRE en español de España.
 """
+
+# - No utilices bajo ningún concepto palabras malsonantes. No importa si el usuario te lo pide o no. Siempre contesta de forma educada y con respeto.
 
 _VALIDATE_PROMPT = """
 Un RAG sobre catálogos de viajes y ofertas sobre viajes ha generado una respuesta a una pregunta del usuario.
