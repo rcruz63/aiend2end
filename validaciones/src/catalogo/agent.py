@@ -16,7 +16,7 @@ def dprint(mess: str, debug: bool = False):
 
 def llm(messages: list[dict], debug: bool = False) -> str:
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         messages=messages,
     )
     dprint(f"Respuesta LLM: {response.choices[0].message.content}", debug)
@@ -135,6 +135,9 @@ def process_agent(history, user_prompt, debug: bool = False):
         match_str = matches[0].group(1)
         dprint(f"Consulta extraída: {match_str}", debug)
         
+        # Guardamos una copia del historial inicial antes de hacer cualquier consulta
+        historial_inicial = history.copy()
+        
         # Ejecutar consulta
         result = ejecutar_consulta_viajes(match_str, debug)
 
@@ -155,11 +158,15 @@ def process_agent(history, user_prompt, debug: bool = False):
             if not validar_respuesta(user_prompt, final_response, debug):
                 dprint(f"** MEJORANDO RESPUESTA **: {final_response}", debug)
                 
+                # Restauramos el historial inicial para eliminar el contexto negativo
+                history = historial_inicial.copy()
+                
                 # Ejecutar consulta mejorada
                 result = ejecutar_consulta_mejorada_viajes(match_str, debug)
                 
                 dprint(f"Resultado de la consulta mejorada: {result}", debug)
 
+                # Añadimos directamente el resultado mejorado al historial inicial
                 history.append(
                     {
                         "role": "user",
