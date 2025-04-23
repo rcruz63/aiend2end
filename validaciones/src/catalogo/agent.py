@@ -1,9 +1,12 @@
 import re
 from pprint import pprint
-
+from dotenv import load_dotenv
 import click
 from openai import OpenAI
 from .rag import realizar_consulta, realizar_consulta_mejorada
+
+load_dotenv()
+
 client = OpenAI()
 
 def dprint(mess: str, debug: bool = False):
