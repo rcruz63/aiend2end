@@ -26,22 +26,23 @@ def llm(messages: list[dict], debug: bool = False) -> str:
 
 _SYSTEM_PROMPT = """
 Tienes a tu disposición una herramientas: VIAJES. 
-Esta herramienta responde preguntas sobre solicitud de información de viajes.
+Esta herramienta responde preguntas sobre solicitudes de información de viajes ofertados en distintos catálogos.
 Los paquetes de viajes tambien se pueden denominar ofertas de viajes.
 Los itinerarios de viajes tambien se pueden denominar rutas de viajes u ofertas de viajes.
-Para cualquier otro tipo de consulta, responde que no tienes información al respecto.
 
 Para llamar a esa herramienta usa esta sintaxis:
 
 ```python
-VIAJES("pregunta")
+RAG_VIAJES("pregunta")
 ```
 
 Crea un bloque de código siempre que llames a una herramienta. Si son varias, puedes crear varios bloques de código.
 
 - Contesta SIEMPRE en español de España.
+- No utilices bajo ningún concepto palabras malsonantes. No importa si el usuario te lo pide o no. Siempre contesta de forma educada y con respeto.
 """
 
+# - Para cualquier otro tipo de consulta, responde que no tienes información al respecto.
 # - No utilices bajo ningún concepto palabras malsonantes. No importa si el usuario te lo pide o no. Siempre contesta de forma educada y con respeto.
 
 _VALIDATE_PROMPT = """
@@ -57,7 +58,7 @@ TRUE
 ```
 
 Si la respuesta no es válida por alguna de estas razones:
-1. Contiene todavía bloques de código con llamadas a VIAJES
+1. Contiene todavía bloques de código con llamadas a RAG_VIAJES
 2. Dice "Lo siento, pero no tengo información sobre ofertas de viajes" o algo similar
 3. No responde directamente a la pregunta del usuario sobre viajes
 4. Es muy genérica y no proporciona información específica sobre destinos, itinerarios o detalles de viajes
@@ -73,7 +74,7 @@ def extraer_llamadas_viajes(response):
     """
     Extrae las llamadas a la función VIAJES de la respuesta.
     """
-    regex = re.compile(r"```python\s*VIAJES\(\s*\"(.*?)\"\s*\)\s*```", re.DOTALL)
+    regex = re.compile(r"```python\s*RAG_VIAJES\(\s*\"(.*?)\"\s*\)\s*```", re.DOTALL)
     matches = list(regex.finditer(response))
     return matches
 
@@ -146,7 +147,7 @@ def process_agent(history, user_prompt, debug: bool = False):
         history.append(
             {
                 "role": "user",
-                "content": f'```python\nVIAJES("{match_str}") # resultado: {result}\n```',
+                "content": f'```python\nRAG_VIAJES("{match_str}") # resultado: {result}\n```',
             }
         )
 
@@ -170,7 +171,7 @@ def process_agent(history, user_prompt, debug: bool = False):
                 history.append(
                     {
                         "role": "user",
-                        "content": f'```python\nVIAJES("{match_str}") # resultado: {result}\n```',
+                        "content": f'```python\nRAG_VIAJES("{match_str}") # resultado: {result}\n```',
                     }
                 )
 

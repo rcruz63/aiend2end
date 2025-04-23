@@ -1,0 +1,4 @@
+Hola que tal? Hay viajes a Paris,rag_viajes\("[^"]*par[ií]s[^"]*"\)
+Si quiero ir a Viena tendré ofertas?,rag_viajes\("[^"]*viena[^"]*"\)
+Quiero viajar por Polonia ¿con quien puedo hacerlo?,rag_viajes\("[^"]*polonia[^"]*"\)
+Como sería un viaje que visitara Florencia,rag_viajes\("[^"]*florencia[^"]*"\)

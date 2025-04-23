@@ -400,6 +400,7 @@ def generar_respuestas_hipoteticas(query: str, num_respuestas: int = 3, debug: b
     """
     prompt = f"""Genera {num_respuestas} posibles respuestas breves a esta pregunta: 
     '{query}'
+    Si la pregunta solicita información sobre un viaje las respuestas generadas deben simular respuestas apropiadas para un usuario que busca viajes.
     Las respuestas deben ser diferentes entre sí y cubrir distintos aspectos.
     Cada respuesta debe venir dentro de un bloque de codigo python. con este formato:
     
