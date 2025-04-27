@@ -1,0 +1,23 @@
+[project]
+name = "agente-catalogo"
+version = "0.1.0"
+description = "Validaciones sobre el agente de Viajes"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1.8",
+    "openai>=1.72.0",
+    "python-dotenv>=1.1.0",
+    "sqlite-vec>=0.1.6",
+    "tqdm>=4.67.1",
+    "pytest>=8.3.5",
+    "langfuse>=2.60.3",
+    "uuid>=1.30",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+markers = [
+    "full: ejecuta las pruebas completas",
+    "fast: ejecuta las pruebas rápidas",
+]
