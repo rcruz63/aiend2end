@@ -1,4 +1,0 @@
-¿Cómo se escribe en python una llamada a una función VIAJES que tiene como parametro el viaje que quiero hacer?
-¿Cual es la capital de la Toscana?
-¿Que es un RAG sobre un catalogo de viajes?
-Escribe un programa python que busque en internet viajes a algun destino que entre como parametro, crea una función VIAJES para encapsular la busqueda
