@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from agent.agent import agent  
+
 
 app = FastAPI(title="Chatbot API", description="A simple chatbot API", version="1.0.0")
 
@@ -23,5 +25,5 @@ async def root():
 async def chat(request: ChatRequest):
     # Here you would typically process the request and generate a response
     # For demonstration, we will just echo the message back
-    response_message = "Hola, soy un chatbot genérico. ¿En qué puedo ayudarte hoy? tu mensaje fue: " + request.message
-    return ChatResponse(response=response_message)
+    response = agent([{"role": "user", "content": request.message}])
+    return ChatResponse(response=response)
