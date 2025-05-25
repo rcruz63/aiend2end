@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Chatbot</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; height: 100vh; }
+        .container {
+            max-width: 900px;
+            min-width: 400px;
+            width: 70vw;
+            min-height: 70vh;
+            height: 80vh;
+            margin: 5vh auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 16px #bbb;
+            padding: 32px 32px 24px 32px;
+            display: flex;
+            flex-direction: column;
+        }
+        h2 { text-align: center; }
+        #chat-box {
+            flex: 1 1 auto;
+            min-height: 350px;
+            max-height: 60vh;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 16px;
+            background: #fafafa;
+            margin-bottom: 20px;
+        }
+        .msg { margin-bottom: 12px; }
+        .user { color: #1976d2; }
+        .assistant { color: #388e3c; }
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        #message {
+            flex: 1 1 auto;
+            padding: 10px;
+            font-size: 1rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        #send {
+            padding: 10px 22px;
+            font-size: 1rem;
+            border-radius: 4px;
+            border: none;
+            background: #1976d2;
+            color: #fff;
+            cursor: pointer;
+        }
+        #send:hover {
+            background: #125ea2;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Chatbot</h2>
+    <div id="chat-box"></div>
+    <div class="input-row">
+        <input type="text" id="message" placeholder="Escribe tu mensaje..." autofocus />
+        <button id="send">Enviar</button>
+    </div>
+</div>
+<script>
+let conversationId = null;
+const chatBox = document.getElementById('chat-box');
+const messageInput = document.getElementById('message');
+const sendBtn = document.getElementById('send');
+
+function appendMessage(role, content) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.innerHTML = `<b>${role === 'user' ? 'Tú' : 'Bot'}:</b> ${content}`;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function renderHistory(history) {
+    chatBox.innerHTML = '';
+    if (Array.isArray(history)) {
+        history.forEach(msg => appendMessage(msg.role, msg.content));
+    }
+}
+
+async function fetchHistory() {
+    if (!conversationId) return;
+    const res = await fetch(`/history/${conversationId}`);
+    if (res.ok) {
+        const history = await res.json();
+        renderHistory(history);
+    }
+}
+
+sendBtn.onclick = async () => {
+    const text = messageInput.value.trim();
+    if (!text) return;
+    appendMessage('user', text);
+    messageInput.value = '';
+    const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, conversation_id: conversationId })
+    });
+    if (res.ok) {
+        const data = await res.json();
+        conversationId = data.conversation_id;
+        appendMessage('assistant', data.response);
+    } else {
+        appendMessage('assistant', 'Error al comunicarse con el servidor.');
+    }
+};
+
+messageInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') sendBtn.onclick();
+});
+</script>
+</body>
+</html>

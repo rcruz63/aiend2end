@@ -8,5 +8,7 @@ dependencies = [
     "fastapi>=0.115.12",
     "openai>=1.82.0",
     "python-dotenv>=1.1.0",
+    "supabase>=2.15.1",
+    "uuid>=1.30",
     "uvicorn>=0.34.2",
 ]

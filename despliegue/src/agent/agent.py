@@ -1,4 +1,11 @@
 import openai
+from agent.setup_logging import setup_logging
+import logging
+import pprint
+
+# Configurar logging
+setup_logging()
+logger = logging.getLogger(__name__)
 
 # TODO: Manejar el historico de la conversación
 # TODO: Manejar la fecha, para que sepa en que día está
@@ -19,11 +26,17 @@ Intenta detectar los errores que comete el usuario y corregirlos. Prpon ejercici
 
 def agent(history: list[dict]) -> str:
 
+    logging.debug(f"History: {history}")
+
     full_history = [
         {"role": "system", "content": SYSTEM_PROMPT},
     ] + history
+    logging.debug(f"Full History: {full_history}")
+    pprint.pprint(f"FULL HISTORY {full_history}")
     response = openai.chat.completions.create(
         model="gpt-4o-mini",
         messages=full_history,
     )
-    return response.choices[0].message.content
+
+    logging.debug(f"LLM Response: {response}")
+    return response.choices[0].message.content or ""

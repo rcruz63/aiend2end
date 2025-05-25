@@ -1,5 +1,10 @@
 import uvicorn
 from dotenv import load_dotenv
+from agent.setup_logging import setup_logging
+import logging
+
+# Configurar logging
+setup_logging()
 
 
 def main():
