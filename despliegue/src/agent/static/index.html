@@ -74,6 +74,17 @@ const chatBox = document.getElementById('chat-box');
 const messageInput = document.getElementById('message');
 const sendBtn = document.getElementById('send');
 
+// Lee el conversationId del hash de la URL
+function getConversationIdFromHash() {
+    return window.location.hash ? window.location.hash.substring(1) : null;
+}
+
+function setConversationIdInHash(id) {
+    if (id) {
+        window.location.hash = '#' + id;
+    }
+}
+
 function appendMessage(role, content) {
     const div = document.createElement('div');
     div.className = 'msg ' + role;
@@ -111,6 +122,7 @@ sendBtn.onclick = async () => {
     if (res.ok) {
         const data = await res.json();
         conversationId = data.conversation_id;
+        setConversationIdInHash(conversationId);
         appendMessage('assistant', data.response);
     } else {
         appendMessage('assistant', 'Error al comunicarse con el servidor.');
@@ -119,6 +131,20 @@ sendBtn.onclick = async () => {
 
 messageInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') sendBtn.onclick();
+});
+
+// Al cargar la página, lee el conversationId del hash y carga el histórico si existe
+window.addEventListener('DOMContentLoaded', () => {
+    conversationId = getConversationIdFromHash();
+    if (conversationId) {
+        fetchHistory();
+    }
+});
+
+// Si el usuario cambia el hash manualmente, recarga el histórico
+window.addEventListener('hashchange', () => {
+    conversationId = getConversationIdFromHash();
+    fetchHistory();
 });
 </script>
 </body>
